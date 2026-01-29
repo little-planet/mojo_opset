@@ -6,9 +6,6 @@ from ..operator import MojoOperator
 
 class MojoLightningIndexer(MojoOperator):
 
-    def __init__(self):
-        pass
-
     def forward(
         self,
         query: torch.Tensor,
