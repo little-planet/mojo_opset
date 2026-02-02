@@ -15,7 +15,7 @@ dtype_str_map = {
 
 
 @pytest.mark.parametrize(
-    "batch, seq_len, head_dim, dtype,",
+    "batch, seq_len, head_dim, dtype",
     [
         (
             batch,
@@ -31,7 +31,7 @@ dtype_str_map = {
 )
 @auto_switch_platform()
 @bypass_not_implemented
-def test_quant_int8(batch, seq_len, head_dim, dtype):
+def test_quant_int8_3d(batch, seq_len, head_dim, dtype):
     device = get_platform()
 
     dtype = dtype_str_map[dtype]
@@ -43,6 +43,70 @@ def test_quant_int8(batch, seq_len, head_dim, dtype):
     quant_func = MojoQuantInt8()
 
     quant_func_ref = quant_func._registry.get("torch")()
-    quant_func.forward_diff_with(
-        quant_func_ref, input_tensor, scale_tensor, mixed_tol=False, ptol=0.999
-    )
+    quant_func.forward_diff_with(quant_func_ref, input_tensor, scale_tensor, mixed_tol=False, ptol=0.999)
+
+
+@pytest.mark.parametrize(
+    "batch, seq_len, num_head, head_dim, dtype",
+    [
+        (
+            batch,
+            seq_len,
+            num_head,
+            head_dim,
+            dtype,
+        )
+        for batch in [4]
+        for seq_len in [256, 512, 777, 1024, 2048, 8192, 16384]
+        for num_head in [8]
+        for head_dim in [128]
+        for dtype in ["bfloat16", "float16", "float32"]
+    ],
+)
+@auto_switch_platform()
+@bypass_not_implemented
+def test_quant_int8_4d(batch, seq_len, num_head, head_dim, dtype):
+    device = get_platform()
+
+    dtype = dtype_str_map[dtype]
+
+    input_tensor = torch.randn(batch, seq_len, num_head, head_dim, dtype=dtype, device=device)
+    # *  Only consider scale_tensor as 1.
+    scale_tensor = torch.ones(head_dim, dtype=dtype, device=device)
+
+    quant_func = MojoQuantInt8()
+
+    quant_func_ref = quant_func._registry.get("torch")()
+    quant_func.forward_diff_with(quant_func_ref, input_tensor, scale_tensor, mixed_tol=False, ptol=0.999)
+
+
+@pytest.mark.parametrize(
+    "batch, seq_len, head_dim, dtype",
+    [
+        (
+            batch,
+            seq_len,
+            head_dim,
+            dtype,
+        )
+        for batch in [4]
+        for seq_len in [16384]
+        for head_dim in [128]
+        for dtype in ["bfloat16", "float16", "float32"]
+    ],
+)
+def test_quant_int8_3d_without_scale(batch, seq_len, head_dim, dtype):
+    device = get_platform()
+
+    dtype = dtype_str_map[dtype]
+
+    input_tensor = torch.randn(batch, seq_len, head_dim, dtype=dtype, device=device)
+
+    quant_func = MojoQuantInt8()
+
+    quant_func_ref = quant_func._registry.get("torch")()
+    quant_func.forward_diff_with(quant_func_ref, input_tensor, None, mixed_tol=False, ptol=0.999)
+
+
+if __name__ == "__main__":
+    pytest.main(["-s", "-v", "tests/accuracy/operators/test_misc.py::test_quant_int8_4d"])
