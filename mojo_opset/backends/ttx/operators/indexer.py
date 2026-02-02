@@ -8,6 +8,9 @@ from mojo_opset.core import MojoLightningIndexer
 class TTXLightningIndexer(MojoLightningIndexer):
     supported_platforms_list = ["npu"]
 
+    def __init__(self):
+        super().__init__()
+
     def forward(
         self,
         query: torch.Tensor,
@@ -40,31 +43,20 @@ class TTXLightningIndexer(MojoLightningIndexer):
         else:
             key_scale_shape = key_scale.shape
             if len(key_scale_shape) == 1:
-                # [N] -> expand to [B, N, K]
+                # [N] -> expand to [B, N]
                 assert (
                     key_scale_shape[0] == k_seq_len
                 ), f"key_scale [N] must have N={k_seq_len}, got {key_scale_shape[0]}"
                 key_scale = (
                     key_scale.to(torch.float32)
                     .unsqueeze(0)
-                    .unsqueeze(-1)
-                    .expand(batch_size, -1, head_dim)
+                    .expand(batch_size, -1)
                 )
             elif len(key_scale_shape) == 2:
-                # [B,N] -> expand to [B, N, K]
                 assert key_scale_shape == (
                     batch_size,
                     k_seq_len,
                 ), f"key_scale must be [B, N], got {key_scale_shape}"
-                key_scale = (
-                    key_scale.to(torch.float32).unsqueeze(-1).expand(-1, -1, head_dim)
-                )
-            elif len(key_scale_shape) == 3:
-                assert key_scale_shape == (
-                    batch_size,
-                    k_seq_len,
-                    head_dim,
-                ), f"key_scale must be [B, N, K], got {key_scale_shape}"
             else:
                 raise ValueError(f"Invalid key_scale shape {key_scale_shape}")
 

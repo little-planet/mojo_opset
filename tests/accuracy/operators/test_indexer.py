@@ -29,7 +29,7 @@ dtype_str_map = {
             torch.randn(B, M, H, K, dtype=dtype),
             torch.randn(B, M, H, dtype=torch.float32),
             torch.randn(B, N, K, dtype=dtype),
-            torch.randn(B, N, K, dtype=torch.float32),
+            torch.randn(B, N, dtype=torch.float32),
         )
         for (B, M, N, H, K) in TEST_SHAPES
         for dtype in TEST_DTYPES
