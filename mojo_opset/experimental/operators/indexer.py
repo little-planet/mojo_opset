@@ -41,15 +41,12 @@ class MojoIndexer(MojoOperator):
         self.rope_head_dim = qk_rope_head_dim
         self.topk = topk
         self.q_lora_rank = q_lora_rank
-        self.weight_q_b = nn.Parameter(torch.empty(n_heads * head_dim, q_lora_rank))
-        self.wq_b = MojoLinear(weight=self.weight_q_b)
-        self.weight_k = nn.Parameter(torch.empty(self.head_dim, self.dim))
-        self.wk = MojoLinear(weight=self.weight_k)
+        self.wq_b = MojoLinear(weight=nn.Parameter(torch.empty(n_heads * head_dim, q_lora_rank)))
+        self.wk = MojoLinear(weight=nn.Parameter(torch.empty(self.head_dim, self.dim)))
 
         self.k_norm = MojoLayerNorm(self.head_dim)
         # weights_proj in the checkpoint is stored in bf16, while the parameters here are stored in fp32 for convenient.
-        self.weight_proj = nn.Parameter(torch.empty((self.n_heads, self.dim), dtype=torch.float32))
-        self.weights_proj = MojoLinear(weight=self.weight_proj)
+        self.weights_proj = MojoLinear(weight=nn.Parameter(torch.empty((self.n_heads, self.dim), dtype=torch.float32)))
         self.softmax_scale = self.head_dim**-0.5
         self.scale_fmt = scale_fmt
 
@@ -95,8 +92,8 @@ class MojoIndexer(MojoOperator):
         weights = weights * q_scale * self.softmax_scale
 
         index_score = self.lightning_indexer(
-            q_quant,
-            weights,
+            q_quant.contiguous(),
+            weights.contiguous(),
             key=self.k_cache[:bsz, :end_pos].contiguous(),
             key_scale=self.k_scale_cache[:bsz, :end_pos].contiguous(),
         )

@@ -2,17 +2,14 @@ import torch
 import triton
 import triton.language as tl
 
+from mojo_opset.backends.ttx.kernels.npu.utils import get_num_cores
+
 
 def quant_int8_infer_impl(
     input_tensor: torch.Tensor,
     scale_tensor: torch.Tensor,
 ):
-    try:
-        import triton.runtime.driver as driver
-
-        num_programs = driver.active.utils.get_device_properties(torch.npu.current_device())["num_vectorcore"]
-    except AttributeError:
-        num_programs = 48
+    num_programs = get_num_cores("vector")
 
     grid = (num_programs,)
     dims = input_tensor.shape[-1]
@@ -26,14 +23,6 @@ def quant_int8_infer_impl(
 
     if input_tensor.ndim == 3:
         batch, seqlen, _ = input_tensor.shape
-    elif input_tensor.ndim == 4:
-        batch, seqlen, num_head, _ = input_tensor.shape
-
-
-
-
-
-    if input_tensor.ndim == 3:
         scale_dynamic_quant_kernel_3d[grid](
             input_tensor,
             scale_tensor,
@@ -46,6 +35,7 @@ def quant_int8_infer_impl(
             BLOCK_SIZE_N=256,
         )
     elif input_tensor.ndim == 4:
+        batch, seqlen, num_head, _ = input_tensor.shape
         scale_dynamic_quant_kernel_4d[grid](
             input_tensor,
             scale_tensor,

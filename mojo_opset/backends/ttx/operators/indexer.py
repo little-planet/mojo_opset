@@ -12,7 +12,6 @@ from mojo_opset.backends.ttx.operators.misc import TTXQuantInt8, TTXQuant
 from mojo_opset.utils.platform import get_platform
 
 
-
 class TTXLightningIndexer(MojoLightningIndexer):
     supported_platforms_list = ["npu"]
 
@@ -83,19 +82,28 @@ class TTXIndexer(MojoIndexer):
     def __init__(
         self,
         parent_instance: MojoIndexer,
+        max_batch_size: int = 128,
+        max_seq_len: int = 32768,
     ):
         self.__dict__.update(parent_instance.__dict__)
 
         original_norm = self.k_norm
 
-        self.wq_b = TTXLinear(weight=self.weight_q_b)
-        self.wk = TTXLinear(weight=self.weight_k)
+        self.wq_b = TTXLinear(weight=self.wq_b.weight)
+        self.wk = TTXLinear(weight=self.wk.weight)
         self.k_norm = TTXLayerNorm(self.head_dim)
-        self.weights_proj = TTXLinear(weight=self.weight_proj)
+        self.weights_proj = TTXLinear(weight=self.weights_proj.weight)
 
         self.k_norm.weight = original_norm.weight
         self.k_norm.bias = original_norm.bias
         self.k_norm.variance_epsilon = original_norm.variance_epsilon
+
+        self.register_buffer("k_cache_ttx", torch.zeros(max_batch_size, max_seq_len, self.head_dim, dtype=torch.int8), persistent=False)
+        self.register_buffer(
+            "k_scale_cache_ttx",
+            torch.zeros(max_batch_size, max_seq_len, dtype=torch.float32),
+            persistent=False,
+        )
 
         self.rope = TTXIndexerRoPE()
         self.activation = TTXIndexerRotateActivation()
@@ -126,8 +134,8 @@ class TTXIndexer(MojoIndexer):
         q_quant, q_scale = self.quant(q, None)
         k_quant, k_scale = self.quant(k, None)
 
-        self.k_cache[:bsz, start_pos:end_pos] = k_quant
-        self.k_scale_cache[:bsz, start_pos:end_pos] = k_scale
+        self.k_cache_ttx[:bsz, start_pos:end_pos] = k_quant
+        self.k_scale_cache_ttx[:bsz, start_pos:end_pos] = k_scale
 
         weights = self.weights_proj(x.float()) * self.n_heads**-0.5
         weights = weights * q_scale * self.softmax_scale
@@ -135,8 +143,8 @@ class TTXIndexer(MojoIndexer):
         index_score = self.lightning_indexer(
             q_quant,
             weights,
-            key=self.k_cache[:bsz, :end_pos].contiguous(),
-            key_scale=self.k_scale_cache[:bsz, :end_pos].contiguous(),
+            key=self.k_cache_ttx[:bsz, :end_pos].contiguous(),
+            key_scale=self.k_scale_cache_ttx[:bsz, :end_pos].contiguous(),
         )
 
         if mask is not None:
